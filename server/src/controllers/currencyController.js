@@ -99,3 +99,55 @@ export const requestForecast = async (req, res) => {
     return res.status(500).json({ success: false, error: error.message });
   }
 };
+
+export const getCurrencyExposure = async (req, res) => {
+  try {
+    const trades = await prisma.tradeRequest.findMany({
+      where: { userId: req.user.id },
+      include: {
+        currencyForecasts: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+
+    let totalExposureUSD = 0;
+    const currencyMap = {};
+
+    trades.forEach((trade) => {
+      const amount = Number(trade.tradeAmount || 0);
+      const pair = trade.currencyPair || 'USD/INR';
+      const currency = pair.split('/')[0] || 'USD';
+
+      totalExposureUSD += amount;
+
+      if (!currencyMap[currency]) {
+        currencyMap[currency] = {
+          currency,
+          totalAmount: 0,
+          usdEquivalent: 0,
+        };
+      }
+      currencyMap[currency].totalAmount += amount;
+      currencyMap[currency].usdEquivalent += amount;
+    });
+
+    const currencyBreakdown = Object.values(currencyMap).map((item) => ({
+      ...item,
+      percentage: totalExposureUSD > 0 ? Math.round((item.usdEquivalent / totalExposureUSD) * 100) : 100,
+    }));
+
+    const activeForecasts = trades
+      .map((t) => t.currencyForecasts[0])
+      .filter(Boolean);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalExposureUSD,
+        currencyBreakdown,
+        activeForecasts,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Failed to calculate currency exposure matrix.' });
+  }
+};

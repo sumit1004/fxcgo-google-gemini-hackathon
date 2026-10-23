@@ -21,6 +21,8 @@ import documentRoutes from './routes/documentRoutes.js';
 import recommendationRoutes from './routes/recommendationRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
+import tradeRequestRoutes from './routes/tradeRequestRoutes.js';
+import intelligenceRoutes from './routes/intelligenceRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -81,6 +83,8 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/trade-requests', tradeRequestRoutes);
+app.use('/api/intelligence', intelligenceRoutes);
 
 // 404 Route Handler
 app.use((req, res) => {

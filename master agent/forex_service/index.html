@@ -1,0 +1,169 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forex Forecast Dashboard</title>
+    <!-- Tailwind CSS for Modern Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for Forecasting Graph -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen font-sans">
+
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-8 border-b border-slate-800 pb-6">
+            <div>
+                <h1 class="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-300">
+                    USD / INR Forex Intelligence
+                </h1>
+                <p class="text-slate-400 text-sm mt-1">Hybrid LSTM + XGBoost Predictive Engine</p>
+            </div>
+            <button id="fetchBtn" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-6 py-2.5 rounded-lg shadow-lg hover:shadow-amber-500/20 transition-all">
+                Generate Forecast
+            </button>
+        </header>
+
+        <!-- Status and Metrics -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Current Price Card -->
+            <div class="bg-slate-800/60 border border-slate-700/50 p-6 rounded-2xl">
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Current Exchange Rate</p>
+                <p id="currentPrice" class="text-4xl font-bold text-slate-100">₹--.--</p>
+                <span class="text-xs text-emerald-400 flex items-center mt-2">● Live yFinance Feed</span>
+            </div>
+
+            <!-- Best Action Advice Card -->
+            <div class="bg-slate-800/60 border border-slate-700/50 p-6 rounded-2xl md:col-span-2">
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Optimal Conversion Strategy</p>
+                <p id="optimalStrategy" class="text-lg text-slate-300 font-medium">Click "Generate Forecast" to run optimization paths.</p>
+            </div>
+        </div>
+
+        <!-- Graph & Details Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Predictions Chart Card -->
+            <div class="bg-slate-800/60 border border-slate-700/50 p-6 rounded-2xl lg:col-span-2">
+                <h2 class="text-lg font-bold text-slate-200 mb-4">Expected 20-Day Path Projection</h2>
+                <div class="relative h-[320px] w-full">
+                    <canvas id="forecastChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Detailed Prediction List Card -->
+            <div class="bg-slate-800/60 border border-slate-700/50 p-6 rounded-2xl">
+                <h2 class="text-lg font-bold text-slate-200 mb-4">Step-by-Step Forecast</h2>
+                <div id="forecastList" class="overflow-y-auto max-h-[300px] pr-2 space-y-2 text-sm text-slate-300">
+                    <p class="text-slate-500 italic text-center py-8">No data loaded.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chartInstance = null;
+
+        document.getElementById('fetchBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('fetchBtn');
+            btn.innerText = "Predicting...";
+            btn.disabled = true;
+
+            try {
+                // Fetch from Local Flask API instance
+                const response = await fetch('http://localhost:5000/predict');
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    // Update Current Price
+                    document.getElementById('currentPrice').innerText = `₹${data.current_price.toFixed(2)}`;
+
+                    // Process predictions to find optimal convert point (Minimum Predicted Exchange rate)
+                    const forecast = data.forecast;
+                    let minPriceNode = forecast[0];
+                    for (let node of forecast) {
+                        if (node.predicted_price < minPriceNode.predicted_price) {
+                            minPriceNode = node;
+                        }
+                    }
+
+                    // Update Conversion Strategy Recommendation Card
+                    document.getElementById('optimalStrategy').innerHTML = `
+                        The model forecasts a structural dip. The most optimal date to buy/convert USD is on 
+                        <strong class="text-amber-400 font-extrabold underline">${minPriceNode.date}</strong> 
+                        at an expected rate of <strong class="text-slate-100">₹${minPriceNode.predicted_price.toFixed(2)}</strong>.
+                    `;
+
+                    // Update Forecast List
+                    const listContainer = document.getElementById('forecastList');
+                    listContainer.innerHTML = '';
+                    forecast.forEach(item => {
+                        const isOptimal = item.date === minPriceNode.date;
+                        listContainer.innerHTML += `
+                            <div class="flex justify-between items-center py-2 px-3 rounded-lg ${isOptimal ? 'bg-amber-500/10 border border-amber-500/30 text-amber-300' : 'bg-slate-900/40 border border-transparent'}">
+                                <span>${item.date}</span>
+                                <span class="font-semibold">₹${item.predicted_price.toFixed(2)} ${isOptimal ? '★ Best' : ''}</span>
+                            </div>
+                        `;
+                    });
+
+                    // Prepare Chart
+                    const labels = forecast.map(item => item.date);
+                    const prices = forecast.map(item => item.predicted_price);
+
+                    if (chartInstance) {
+                        chartInstance.destroy();
+                    }
+
+                    const ctx = document.getElementById('forecastChart').getContext('2d');
+                    chartInstance = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Predicted Rate (INR)',
+                                data: prices,
+                                borderColor: '#f59e0b',
+                                backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.2,
+                                pointRadius: 4,
+                                pointBackgroundColor: '#f59e0b'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false }
+                            },
+                            scales: {
+                                y: {
+                                    grid: { color: '#334155' },
+                                    ticks: { color: '#94a3b8' }
+                                },
+                                x: {
+                                    grid: { display: false },
+                                    ticks: { color: '#94a3b8' }
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    alert("Error generation: " + data.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Could not establish connection with Flask server. Ensure Local Flask app.py is running.");
+            } finally {
+                btn.innerText = "Generate Forecast";
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
+
+

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Route Optimization Dashboard</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-200 font-sans min-h-screen p-6">
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Controls -->
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 flex flex-col md:flex-row items-end gap-4">
+            <div class="flex-1 w-full">
+                <label class="block text-sm font-semibold text-slate-400 mb-2">Origin Port</label>
+                <select id="originInput" class="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none focus:border-blue-500 cursor-pointer">
+                    <option value="Nhava Sheva">Nhava Sheva</option>
+                    <option value="Mundra" selected>Mundra</option>
+                    <option value="Chennai">Chennai</option>
+                    <option value="Colombo">Colombo</option>
+                    <option value="Singapore">Singapore</option>
+                    <option value="Fremantle">Fremantle</option>
+                    <option value="Melbourne">Melbourne</option>
+                    <option value="Sydney">Sydney</option>
+                </select>
+            </div>
+            <div class="flex-1 w-full">
+                <label class="block text-sm font-semibold text-slate-400 mb-2">Destination Port</label>
+                <select id="destInput" class="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white outline-none focus:border-blue-500 cursor-pointer">
+                    <option value="Nhava Sheva">Nhava Sheva</option>
+                    <option value="Mundra">Mundra</option>
+                    <option value="Chennai">Chennai</option>
+                    <option value="Colombo">Colombo</option>
+                    <option value="Singapore">Singapore</option>
+                    <option value="Fremantle">Fremantle</option>
+                    <option value="Melbourne">Melbourne</option>
+                    <option value="Sydney" selected>Sydney</option>
+                </select>
+            </div>
+            <button id="fetchBtn" onclick="fetchForecast()" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition-colors">
+                Generate Forecast
+            </button>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboard" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left Column: Metrics -->
+            <div class="space-y-6">
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <h2 class="text-xl font-bold mb-4 text-green-500">AI Recommendation</h2>
+                    <div class="space-y-4">
+                        <div class="bg-slate-900 p-4 rounded-lg">
+                            <p class="text-sm text-slate-400">Optimal Departure</p>
+                            <p id="optDate" class="text-2xl font-bold text-white">Pending</p>
+                        </div>
+                        <div class="bg-slate-900 p-4 rounded-lg border-l-4 border-green-500">
+                            <p class="text-sm text-slate-400">Distance Efficiency</p>
+                            <p id="distGain" class="text-xl font-bold text-green-400">-</p>
+                        </div>
+                        <div class="bg-slate-900 p-4 rounded-lg border-l-4 border-blue-500">
+                            <p class="text-sm text-slate-400">Congestion Avoided</p>
+                            <p id="delayGain" class="text-xl font-bold text-blue-400">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 overflow-x-auto">
+                    <h3 class="text-lg font-bold mb-4">7-Day Forecast</h3>
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="text-slate-400 border-b border-slate-700">
+                                <th class="pb-3">Date</th>
+                                <th class="pb-3">Wave (m)</th>
+                                <th class="pb-3">Delay (d)</th>
+                                <th class="pb-3">Freight</th>
+                            </tr>
+                        </thead>
+                        <tbody id="forecastTable">
+                            <tr><td colspan="4" class="py-4 text-center text-slate-500">Run optimization to view data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right Column: Map -->
+            <div class="lg:col-span-2 bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col h-[600px]">
+                <h2 class="text-xl font-bold mb-4 text-blue-500 px-2">Dynamic Routing Visualization</h2>
+                <div id="map" class="flex-1 rounded-lg bg-slate-900 border border-slate-700 z-0"></div>
+                <div class="flex gap-4 mt-4 px-2 text-sm text-slate-400">
+                    <span class="flex items-center gap-2"><div class="w-4 h-4 bg-green-500 rounded"></div> Optimal AI Route</span>
+                    <span class="flex items-center gap-2"><div class="w-4 h-4 border-2 border-dashed border-gray-500 rounded"></div> Alternative</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const map = L.map('map').setView([-10, 100], 3);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Esri'
+        }).addTo(map);
+        const routeLayer = L.layerGroup().addTo(map);
+
+        async function fetchForecast() {
+            const origin = document.getElementById('originInput').value;
+            const dest = document.getElementById('destInput').value;
+            const btn = document.getElementById('fetchBtn');
+            
+            if (origin === dest) {
+                alert("Origin and Destination cannot be the same.");
+                return;
+            }
+
+            btn.innerText = 'Optimizing...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`http://127.0.0.1:5001/optimize?origin=${origin}&destination=${dest}`);
+                const data = await res.json();
+                
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                const rec = data.recommendation;
+                document.getElementById('optDate').innerText = rec.optimal_departure_date;
+                document.getElementById('distGain').innerText = `+${rec.optimization_gains.distance_efficiency_percent}%`;
+                document.getElementById('delayGain').innerText = `+${rec.optimization_gains.congestion_avoided_percent}%`;
+
+                const tbody = document.getElementById('forecastTable');
+                tbody.innerHTML = '';
+                data.forecast_comparison.forEach(day => {
+                    const isOptimal = day.date === rec.optimal_departure_date;
+                    tbody.innerHTML += `
+                        <tr class="${isOptimal ? 'bg-green-900/40 text-green-200' : 'border-b border-slate-700/50'}">
+                            <td class="py-3 font-semibold px-2">${day.date}</td>
+                            <td class="py-3">${day.origin_wave_m.toFixed(1)}</td>
+                            <td class="py-3">${day.congestion_days.toFixed(1)}</td>
+                            <td class="py-3 text-green-400">$${day.freight_usd.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                        </tr>
+                    `;
+                });
+
+                routeLayer.clearLayers();
+                let allPoints = [];
+
+                if (rec.map_data.alternative_path_segments) {
+                    rec.map_data.alternative_path_segments.forEach(seg => {
+                        L.polyline(seg.points, { color: 'gray', weight: 4, dashArray: '10, 10', opacity: 0.7 })
+                         .bindTooltip(`Alternative: ${seg.segment}`).addTo(routeLayer);
+                    });
+                }
+
+                rec.map_data.optimal_path_segments.forEach(seg => {
+                    L.polyline(seg.points, { color: '#22c55e', weight: 5, opacity: 0.9 })
+                     .bindTooltip(`Optimal: ${seg.segment}`).addTo(routeLayer);
+                    allPoints.push(...seg.points);
+                });
+
+                if (allPoints.length > 0) {
+                    L.circleMarker(allPoints[0], { color: '#3b82f6', radius: 8, fillOpacity: 1 }).addTo(routeLayer);
+                    L.circleMarker(allPoints[allPoints.length - 1], { color: '#ef4444', radius: 8, fillOpacity: 1 }).addTo(routeLayer);
+                    map.fitBounds(L.polyline(allPoints).getBounds(), { padding: [50, 50] });
+                }
+
+            } catch (err) {
+                console.error(err);
+                alert("Could not connect to the Flask server. Make sure app.py is running on port 5001.");
+            } finally {
+                btn.innerText = 'Generate Forecast';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -14,18 +14,29 @@ export const createTrade = async (req, res) => {
     const tradeType = req.body.tradeType || (req.user?.accountType === 'IMPORTER' ? 'IMPORT' : 'EXPORT');
     const exporterName = req.body.exporterName || (req.user?.accountType === 'EXPORTER' ? req.user.fullName : 'Atlantic Mercantile Exporters');
     const importerName = req.body.importerName || (req.user?.accountType === 'IMPORTER' ? req.user.fullName : 'Rotterdam Global Terminal BV');
-    const businessCountry = req.body.businessCountry || req.user?.country || 'United States';
-    const currencyPair = req.body.currencyPair || (req.body.currency ? `${req.body.currency}/USD` : 'EUR/USD');
+    const portCountryMap = {
+      'Nhava Sheva': 'India',
+      'Mundra': 'India',
+      'Chennai': 'India',
+      'Colombo': 'Sri Lanka',
+      'Singapore': 'Singapore',
+      'Fremantle': 'Australia',
+      'Melbourne': 'Australia',
+      'Sydney': 'Australia',
+    };
+
+    const originPort = req.body.originPort || 'Nhava Sheva';
+    const destinationPort = req.body.destinationPort || 'Singapore';
+    const originCountry = req.body.originCountry || portCountryMap[originPort] || 'India';
+    const destinationCountry = req.body.destinationCountry || portCountryMap[destinationPort] || 'Singapore';
+    const businessCountry = req.body.businessCountry || req.user?.country || originCountry;
+    const currencyPair = (req.body.currencyPair || req.body.currency_pair || 'USD/INR').toUpperCase().trim();
     const tradeAmount = Number(req.body.tradeAmount || req.body.tradeValue || 100000);
     const shipmentValue = Number(req.body.shipmentValue || req.body.tradeValue || tradeAmount);
-    const expectedPaymentDate = req.body.expectedPaymentDate || req.body.targetDeliveryDate || new Date(Date.now() + 30 * 86400000);
-    const expectedShipmentDate = req.body.expectedShipmentDate || new Date(Date.now() + 7 * 86400000);
-    const cargoCategory = req.body.cargoCategory || 'AGRICULTURAL_COMMODITY';
-    const cargoDescription = req.body.cargoDescription || req.body.commodity || 'Premium Export Cargo';
-    const originPort = req.body.originPort || 'Shanghai Port';
-    const originCountry = req.body.originCountry || originPort.split(',')[1]?.trim() || 'China';
-    const destinationPort = req.body.destinationPort || 'Port of Rotterdam';
-    const destinationCountry = req.body.destinationCountry || destinationPort.split(',')[1]?.trim() || 'Netherlands';
+    const expectedPaymentDate = req.body.expectedPaymentDate || req.body.targetDeliveryDate || new Date(Date.now() + 20 * 86400000);
+    const expectedShipmentDate = req.body.expectedShipmentDate || new Date(Date.now() + 5 * 86400000);
+    const cargoCategory = req.body.cargoCategory || req.body.productCategory || 'Electronics';
+    const cargoDescription = req.body.cargoDescription || req.body.tradeName || req.body.commodity || `${cargoCategory} Consignment (${originPort} to ${destinationPort})`;
     const transportMode = req.body.transportMode || req.body.transitMode || 'OCEAN';
     const riskTolerance = req.body.riskTolerance || 'MEDIUM';
     const historicalDataPeriod = req.body.historicalDataPeriod || '90_DAYS';
