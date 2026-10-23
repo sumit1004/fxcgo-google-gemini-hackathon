@@ -81,15 +81,22 @@ export default function Navbar({ onNavigate, onGetStarted }) {
           Contact Us
         </button>
 
-        <button 
+        <a 
+          href="/login"
+          className="nav-link"
+          style={{ fontWeight: 700 }}
+          onClick={() => setMobileOpen(false)}
+        >
+          Sign In
+        </a>
+
+        <a 
+          href="/register"
           className="nav-cta" 
-          onClick={() => {
-            setMobileOpen(false);
-            onGetStarted();
-          }}
+          onClick={() => setMobileOpen(false)}
         >
           Get Started
-        </button>
+        </a>
       </nav>
 
       {/* Mobile Menu Button */}

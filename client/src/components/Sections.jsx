@@ -26,16 +26,16 @@ export function HeroSection({ onExplore, onDiscover }) {
           </p>
 
           <div className="hero-actions">
-            <button 
-              className="btn-primary" 
+            <button
+              className="btn-primary"
               onClick={onExplore}
               aria-label="Explore FXCGO platform"
             >
               Explore FXCGO
               <ArrowRight size={15} />
             </button>
-            <button 
-              className="btn-secondary" 
+            <button
+              className="btn-secondary"
               onClick={onDiscover}
               aria-label="Discover How It Works"
             >
@@ -300,16 +300,16 @@ export function ContactSection({ onGetStarted, onNavigate }) {
           </p>
 
           <div className="contact-actions">
-            <button 
-              className="btn-primary" 
+            <button
+              className="btn-primary"
               onClick={onGetStarted}
               aria-label="Get Started with FXCGO"
             >
               Get Started
               <ArrowRight size={15} />
             </button>
-            <button 
-              className="btn-secondary theme-dark" 
+            <button
+              className="btn-secondary theme-dark"
               onClick={() => {
                 document.getElementById('contact-name-input')?.focus();
               }}
@@ -324,16 +324,16 @@ export function ContactSection({ onGetStarted, onNavigate }) {
         <div className="section-content contact-form-card">
           {formSubmitted ? (
             <div style={{ textAlign: 'center', padding: '32px 0' }}>
-              <div 
-                style={{ 
-                  width: '42px', 
-                  height: '42px', 
-                  borderRadius: '50%', 
-                  backgroundColor: 'var(--lime)', 
-                  color: 'var(--deep-teal)', 
-                  display: 'grid', 
-                  placeContent: 'center', 
-                  margin: '0 auto 16px' 
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--lime)',
+                  color: 'var(--deep-teal)',
+                  display: 'grid',
+                  placeContent: 'center',
+                  margin: '0 auto 16px'
                 }}
               >
                 <Check size={20} strokeWidth={3} />
@@ -351,7 +351,7 @@ export function ContactSection({ onGetStarted, onNavigate }) {
                   id="contact-name-input"
                   type="text"
                   required
-                  placeholder="Alexander Wright"
+                  placeholder="Sumit Kumar"
                   className="form-input"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -363,7 +363,7 @@ export function ContactSection({ onGetStarted, onNavigate }) {
                 <input
                   type="email"
                   required
-                  placeholder="trade@enterprise.com"
+                  placeholder="sumitkumar042006@gmail.com"
                   className="form-input"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -375,7 +375,7 @@ export function ContactSection({ onGetStarted, onNavigate }) {
                 <textarea
                   rows={3}
                   required
-                  placeholder="Tell us about your trade corridors, currency exposure, or documentation needs..."
+                  placeholder="likh de jo message bhejna hai "
                   className="form-textarea"
                   value={formData.message}
                   onChange={(e) => setFormData({ ...formData, message: e.target.value })}
@@ -404,7 +404,7 @@ export function ContactSection({ onGetStarted, onNavigate }) {
         </nav>
 
         <p className="footer-copy">
-          © 2026 FXCGO. Built for the next era of global trade.
+          © 2026 FXCGO. by team Psychic Coders x Sassy Coders.
         </p>
       </footer>
     </section>

@@ -1,0 +1,585 @@
+// FXCGO International Trade Intelligence & Risk Analysis Platform
+// Prisma Schema for MySQL 8
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -----------------------------------------------------------------------------
+// ENUMS
+// -----------------------------------------------------------------------------
+
+enum AccountType {
+  EXPORTER
+  IMPORTER
+}
+
+enum TradeType {
+  EXPORT
+  IMPORT
+}
+
+enum RiskTolerance {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TransportMode {
+  OCEAN
+  AIR
+  ROAD
+  RAIL
+  MULTIMODAL
+}
+
+enum TradeStatus {
+  DRAFT
+  SUBMITTED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+enum WorkflowStatus {
+  DRAFT
+  SUBMITTED
+  AGENT_1_PENDING
+  AGENT_1_RUNNING
+  AGENT_1_COMPLETED
+  AGENT_2_PENDING
+  AGENT_2_RUNNING
+  AGENT_2_COMPLETED
+  MERGING_RESULTS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum StepStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+enum ContractStatus {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  MATURED
+  CANCELLED
+}
+
+enum ForecastTrend {
+  BULLISH
+  BEARISH
+  NEUTRAL
+  VOLATILE
+}
+
+enum WeatherRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DocumentType {
+  BILL_OF_LADING
+  LETTER_OF_CREDIT
+  COMMERCIAL_INVOICE
+  PACKING_LIST
+  CERTIFICATE_OF_ORIGIN
+  INSURANCE_CERTIFICATE
+  CUSTOMS_DECLARATION
+  OTHER
+}
+
+enum DocumentStatus {
+  REQUIRED
+  UPLOADED
+  VERIFIED
+  REJECTED
+}
+
+enum ShipmentStatus {
+  PLANNED
+  IN_TRANSIT
+  CUSTOMS_HOLD
+  DELIVERED
+  DELAYED
+}
+
+enum AlertType {
+  CURRENCY
+  WEATHER
+  LOGISTICS
+  DOCUMENT
+  WORKFLOW
+  SYSTEM
+}
+
+// -----------------------------------------------------------------------------
+// 1. USERS & AUTHENTICATION
+// -----------------------------------------------------------------------------
+
+model User {
+  id                 String       @id @default(uuid())
+  email              String       @unique
+  passwordHash       String
+  fullName           String
+  accountType        AccountType
+  companyId          String       @unique // Platform generated: FXE-XXXXXXXX or FXI-XXXXXXXX
+  businessIdentifier String?      // Optional Tax / GST / VAT ID
+  phone              String?
+  country            String?      @default("India")
+  isVerified         Boolean      @default(false)
+  resetPasswordToken String?
+  resetPasswordExpires DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  refreshTokens      RefreshToken[]
+  tradeRequests      TradeRequest[]
+  forwardContracts   ForwardContract[]
+  tradeDocuments     TradeDocument[]
+  tradeWorkflows     TradeWorkflow[]
+  savedReports       SavedReport[]
+  alerts             Alert[]
+  alertPreferences   AlertPreference?
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// 2. REFRESH TOKENS (Rotating Session Tokens)
+// -----------------------------------------------------------------------------
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// -----------------------------------------------------------------------------
+// 3. TRADE REQUESTS (Core Trade Entity)
+// -----------------------------------------------------------------------------
+
+model TradeRequest {
+  id                   String        @id @default(uuid())
+  tradeRef             String        @unique // FXT-XXXXXXXX
+  userId               String
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Business Information
+  tradeType            TradeType
+  exporterName         String
+  importerName         String
+  businessCountry      String
+  
+  // Currency Information
+  currencyPair         String        // e.g. USD/INR, EUR/USD
+  tradeAmount          Decimal       @db.Decimal(18, 4)
+  expectedPaymentDate  DateTime
+  historicalDataPeriod String?       @default("90_DAYS")
+  currencyExposure     Decimal?      @db.Decimal(18, 4)
+  
+  // Shipment Information
+  cargoCategory        String        // e.g. Electronics, Textiles, Agriculture
+  cargoDescription     String        @db.Text
+  shipmentValue        Decimal       @db.Decimal(18, 4)
+  originCountry        String
+  originPort           String
+  destinationCountry   String
+  destinationPort      String
+  transportMode        TransportMode @default(OCEAN)
+  expectedShipmentDate DateTime
+  
+  // Additional Requirements
+  preferredRoute       String?
+  maxFreightBudget     Decimal?      @db.Decimal(18, 4)
+  riskTolerance        RiskTolerance @default(MEDIUM)
+  additionalNotes      String?       @db.Text
+  
+  status               TradeStatus   @default(DRAFT)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  shipments            Shipment[]
+  forwardContracts     ForwardContract[]
+  currencyForecasts    CurrencyForecast[]
+  routeRecommendations RouteRecommendation[]
+  weatherReports       WeatherReport[]
+  freightQuotes        FreightQuote[]
+  tradeDocuments       TradeDocument[]
+  documentChecklists   DocumentChecklist[]
+  tradeWorkflows       TradeWorkflow[]
+  tradeResults         TradeResult[]
+  savedReports         SavedReport[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([currencyPair])
+  @@map("trade_requests")
+}
+
+// -----------------------------------------------------------------------------
+// 4. SHIPMENTS & 5. SHIPMENT EVENTS
+// -----------------------------------------------------------------------------
+
+model Shipment {
+  id             String         @id @default(uuid())
+  tradeRequestId String
+  tradeRequest   TradeRequest   @relation(fields: [tradeRequestId], references: [id], onDelete: Cascade)
+  trackingNumber String?        @unique
+  carrier        String?
+  origin         String
+  destination    String
+  departureDate  DateTime?
+  eta            DateTime?
+  status         ShipmentStatus @default(PLANNED)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  events         ShipmentEvent[]
+
+  @@index([tradeRequestId])
+  @@map("shipments")
+}
+
+model ShipmentEvent {
+  id          String   @id @default(uuid())
+  shipmentId  String
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  eventType   String
+  location    String
+  description String
+  timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([shipmentId])
+  @@map("shipment_events")
+}
+
+// -----------------------------------------------------------------------------
+// 6. FORWARD CONTRACTS (Hedge Management)
+// -----------------------------------------------------------------------------
+
+model ForwardContract {
+  id             String         @id @default(uuid())
+  contractRef    String         @unique // FXC-XXXXXXXX
+  tradeRequestId String?
+  tradeRequest   TradeRequest?  @relation(fields: [tradeRequestId], references: [id], onDelete: SetNull)
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  currencyPair   String
+  amount         Decimal        @db.Decimal(18, 4)
+  agreedRate     Decimal        @db.Decimal(18, 4)
+  maturityDate   DateTime
+  counterparty   String?        // Bank / FX Provider
+  status         ContractStatus @default(DRAFT)
+  notes          String?        @db.Text
+  
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([tradeRequestId])
+  @@index([status])
+  @@map("forward_contracts")
+}
+
+// -----------------------------------------------------------------------------
+// 7. CURRENCY FORECASTS (Agent 1 Output Schema)
+// -----------------------------------------------------------------------------
+
+model CurrencyForecast {
+  id                  String         @id @default(uuid())
+  tradeRequestId      String
+  tradeRequest        TradeRequest   @relation(fields: [tradeRequestId], references: [id], onDelete: Cascade)
+  currencyPair        String
+  horizonDays         Int            @default(20)
+  predictedTrend      ForecastTrend?
+  currentRate         Decimal?       @db.Decimal(18, 4)
+  forecastedRate      Decimal?       @db.Decimal(18, 4)
+  potentialExposure   Decimal?       @db.Decimal(18, 4)
+  recommendation      String?        @db.Text
+  modelVersion        String?
+  status              StepStatus     @default(PENDING) // PENDING until model integrated
+  rawOutput           Json?          // Structured 20-day curve payload
+  predictionTimestamp DateTime?
+  createdAt           DateTime       @default(now())
+
+  @@index([tradeRequestId])
+  @@map("currency_forecasts")
+}
+
+// -----------------------------------------------------------------------------
+// 8. ROUTE RECOMMENDATIONS (Agent 2 Sub-Module A)
+// -----------------------------------------------------------------------------
+
+model RouteRecommendation {
+  id                   String       @id @default(uuid())
+  tradeRequestId       String
+  tradeRequest         TradeRequest @relation(fields: [tradeRequestId], references: [id], onDelete: Cascade)
+  originPort           String
+  destinationPort      String
+  recommendedRoute     String?
+  distanceKm           Decimal?     @db.Decimal(12, 2)
+  estimatedTransitDays Int?
+  routeAlternatives    Json?        // Coordinates and alternatives for Leaflet
+  waypoints            Json?        // Coordinates array
+  status               StepStatus   @default(PENDING)
+  createdAt            DateTime     @default(now())
+
+  @@index([tradeRequestId])
+  @@map("route_recommendations")
+}
+
+// -----------------------------------------------------------------------------
+// 9. WEATHER REPORTS (Agent 2 Sub-Module B)
+// -----------------------------------------------------------------------------
+
+model WeatherReport {
+  id                 String            @id @default(uuid())
+  tradeRequestId     String
+  tradeRequest       TradeRequest      @relation(fields: [tradeRequestId], references: [id], onDelete: Cascade)
+  originWeather      String?
+  destinationWeather String?
+  routeConditions    String?           @db.Text
+  weatherRisk        WeatherRiskLevel? @default(LOW)
+  expectedDelayDays  Int?              @default(0)
+  alerts             Json?             // Array of storm/gale/cyclone alerts
+  status             StepStatus        @default(PENDING)
+  createdAt          DateTime          @default(now())
+
+  @@index([tradeRequestId])
+  @@map("weather_reports")
+}
+
+// -----------------------------------------------------------------------------
+// 10. FREIGHT QUOTES (Agent 2 Sub-Module C)
+// -----------------------------------------------------------------------------
+
+model FreightQuote {
+  id                String        @id @default(uuid())
+  tradeRequestId    String
+  tradeRequest      TradeRequest  @relation(fields: [tradeRequestId], references: [id], onDelete: Cascade)
+  transportMode     TransportMode
+  cargoCategory     String
+  estimatedCost     Decimal?      @db.Decimal(18, 4)
+  currency          String        @default("USD")
+  recommendedOption String?
+  quoteComparison   Json?         // Carriers, ocean vs air benchmarks
+  providerNotes     String?       @db.Text
+  status            StepStatus    @default(PENDING)
+  createdAt         DateTime      @default(now())
+
+  @@index([tradeRequestId])
+  @@map("freight_quotes")
+}
+
+// -----------------------------------------------------------------------------
+// 11. TRADE DOCUMENTS & 12. CHECKLISTS (Agent 2 Sub-Module D)
+// -----------------------------------------------------------------------------
+
+model TradeDocument {
+  id               String         @id @default(uuid())
+  tradeRequestId   String
+  tradeRequest     TradeRequest   @relation(fields: [tradeRequestId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentType     DocumentType
+  fileName         String
+  originalName     String
+  filePath         String
+  fileSize         Int
+  mimeType         String
+  documentStatus   DocumentStatus @default(UPLOADED)
+  issuingAuthority String?
+  notes            String?        @db.Text
+  uploadedAt       DateTime       @default(now())
+
+  @@index([tradeRequestId])
+  @@index([userId])
+  @@map("trade_documents")
+}
+
+model DocumentChecklist {
+  id             String       @id @default(uuid())
+  tradeRequestId String
+  tradeRequest   TradeRequest @relation(fields: [tradeRequestId], references: [id], onDelete: Cascade)
+  documentName   String
+  documentType   DocumentType
+  isMandatory    Boolean      @default(true)
+  isUploaded     Boolean      @default(false)
+  verified       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@index([tradeRequestId])
+  @@map("document_checklists")
+}
+
+// -----------------------------------------------------------------------------
+// 13. TRADE WORKFLOWS & 14. WORKFLOW STEPS (Sequential Engine)
+// -----------------------------------------------------------------------------
+
+model TradeWorkflow {
+  id             String         @id @default(uuid())
+  tradeRequestId String
+  tradeRequest   TradeRequest   @relation(fields: [tradeRequestId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStatus  WorkflowStatus @default(SUBMITTED)
+  agent1Status   StepStatus     @default(PENDING)
+  agent2Status   StepStatus     @default(PENDING)
+  lastError      String?        @db.Text
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  steps          WorkflowStep[]
+  tradeResults   TradeResult[]
+
+  @@index([tradeRequestId])
+  @@index([userId])
+  @@index([currentStatus])
+  @@map("trade_workflows")
+}
+
+model WorkflowStep {
+  id           String        @id @default(uuid())
+  workflowId   String
+  workflow     TradeWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stepName     String        // e.g. "AGENT_1_FORECAST", "AGENT_2_OPTIMIZATION", "MERGE_RESULTS"
+  agentName    String        // "Agent1_Currency" or "Agent2_Optimization"
+  status       StepStatus    @default(PENDING)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  errorDetails String?       @db.Text
+  outputData   Json?
+  createdAt    DateTime      @default(now())
+
+  @@index([workflowId])
+  @@map("workflow_steps")
+}
+
+// -----------------------------------------------------------------------------
+// 15. TRADE RESULTS (Unified Final Recommendation)
+// -----------------------------------------------------------------------------
+
+model TradeResult {
+  id                   String        @id @default(uuid())
+  tradeRequestId       String
+  tradeRequest         TradeRequest  @relation(fields: [tradeRequestId], references: [id], onDelete: Cascade)
+  workflowId           String
+  workflow             TradeWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  
+  currencyRiskSummary  Json?         // From Agent 1
+  logisticsSummary     Json?         // From Agent 2
+  documentationSummary Json?         // From Agent 2
+  
+  estimatedTotalCost   Decimal?      @db.Decimal(18, 4)
+  overallRiskLevel     RiskTolerance @default(MEDIUM)
+  potentialSavings     Decimal?      @db.Decimal(18, 4)
+  recommendedActions   Json?         // Array of action items
+  finalStatus          StepStatus    @default(PENDING)
+  mergedAt             DateTime?
+  createdAt            DateTime      @default(now())
+
+  @@index([tradeRequestId])
+  @@index([workflowId])
+  @@map("trade_results")
+}
+
+// -----------------------------------------------------------------------------
+// 16. SAVED REPORTS
+// -----------------------------------------------------------------------------
+
+model SavedReport {
+  id             String        @id @default(uuid())
+  tradeRequestId String?
+  tradeRequest   TradeRequest? @relation(fields: [tradeRequestId], references: [id], onDelete: SetNull)
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportTitle    String
+  reportType     String        // "SUMMARY", "RISK_AUDIT", "COMPREHENSIVE"
+  reportData     Json
+  pdfUrl         String?
+  createdAt      DateTime      @default(now())
+
+  @@index([userId])
+  @@index([tradeRequestId])
+  @@map("saved_reports")
+}
+
+// -----------------------------------------------------------------------------
+// 17. ALERTS & 18. ALERT PREFERENCES
+// -----------------------------------------------------------------------------
+
+model Alert {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String    @db.Text
+  alertType AlertType @default(SYSTEM)
+  isRead    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("alerts")
+}
+
+model AlertPreference {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailAlerts          Boolean  @default(true)
+  currencyFluctuations Boolean  @default(true)
+  weatherAlerts        Boolean  @default(true)
+  documentDeadlines    Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
+
+  @@map("alert_preferences")
+}
+
+// -----------------------------------------------------------------------------
+// 19. AUDIT LOGS (Security & Compliance)
+// -----------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String   // "LOGIN", "REGISTER", "TRADE_CREATE", "WORKFLOW_TRIGGER", "DOCUMENT_UPLOAD"
+  entityType String   // "USER", "TRADE", "WORKFLOW", "DOCUMENT", "CONTRACT"
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
+  @@map("audit_logs")
+}
