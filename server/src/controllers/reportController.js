@@ -11,9 +11,88 @@ export const listReports = async (req, res) => {
       },
     });
 
-    return res.status(200).json({ success: true, data: { reports } });
+    // Format reports for frontend display
+    const formattedReports = reports.map((r) => ({
+      id: r.id,
+      title: r.reportTitle,
+      type: r.reportType,
+      createdAt: r.createdAt,
+      content: r.reportData,
+      tradeRef: r.tradeRequest?.tradeRef || 'FXT-GENERAL',
+    }));
+
+    return res.status(200).json({ success: true, data: { reports: formattedReports } });
   } catch (error) {
     return res.status(500).json({ success: false, error: 'Failed to fetch saved reports.' });
+  }
+};
+
+export const generateReport = async (req, res) => {
+  try {
+    const tradeId = req.body.tradeId || req.body.tradeRequestId;
+    const title = req.body.title || req.body.reportTitle || `Trade Intelligence Report // ${new Date().toLocaleDateString()}`;
+
+    if (!tradeId) {
+      return res.status(400).json({ success: false, error: 'tradeId is required.' });
+    }
+
+    const trade = await prisma.tradeRequest.findFirst({
+      where: { id: tradeId, userId: req.user.id },
+      include: {
+        currencyForecasts: { orderBy: { createdAt: 'desc' }, take: 1 },
+        routeRecommendations: { orderBy: { createdAt: 'desc' }, take: 1 },
+        weatherReports: { orderBy: { createdAt: 'desc' }, take: 1 },
+        freightQuotes: { orderBy: { createdAt: 'desc' }, take: 1 },
+        documentChecklists: true,
+        tradeResults: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+
+    if (!trade) {
+      return res.status(404).json({ success: false, error: 'Trade request not found.' });
+    }
+
+    const reportData = {
+      tradeRef: trade.tradeRef,
+      tradeName: trade.cargoDescription || `${trade.originPort} → ${trade.destinationPort}`,
+      origin: trade.originPort,
+      destination: trade.destinationPort,
+      amountUSD: trade.tradeAmount,
+      currencyPair: trade.currencyPair,
+      currencyForecast: trade.currencyForecasts[0] || null,
+      route: trade.routeRecommendations[0] || null,
+      weather: trade.weatherReports[0] || null,
+      freight: trade.freightQuotes[0] || null,
+      checklists: trade.documentChecklists || [],
+      synthesis: trade.tradeResults[0] || null,
+      generatedAt: new Date().toISOString(),
+    };
+
+    const report = await prisma.savedReport.create({
+      data: {
+        userId: req.user.id,
+        tradeRequestId: trade.id,
+        reportTitle: title.trim(),
+        reportType: 'COMPREHENSIVE',
+        reportData,
+      },
+    });
+
+    await logAudit({
+      userId: req.user.id,
+      action: 'REPORT_GENERATE',
+      entityType: 'REPORT',
+      entityId: report.id,
+      req,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Comprehensive trade intelligence report compiled.',
+      data: { report },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
   }
 };
 

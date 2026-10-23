@@ -118,6 +118,7 @@ router.get('/:id/report', async (req, res) => {
         weatherReports: { orderBy: { createdAt: 'desc' }, take: 1 },
         freightQuotes: { orderBy: { createdAt: 'desc' }, take: 1 },
         documentChecklists: true,
+        tradeDocuments: { orderBy: { uploadedAt: 'desc' } },
         tradeResults: { orderBy: { createdAt: 'desc' }, take: 1 },
         tradeWorkflows: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
@@ -184,7 +185,11 @@ router.get('/:id/report', async (req, res) => {
           routeRecommendation: trade.routeRecommendations[0] || null,
           weatherReport: trade.weatherReports[0] || null,
           freightQuote: trade.freightQuotes[0] || null,
-          documentsChecklist: trade.documentChecklists || [],
+          documentsChecklist: (trade.documentChecklists || []).map((chk) => {
+            const hasUpload = (trade.tradeDocuments || []).some((d) => d.documentType === chk.documentType);
+            return { ...chk, isUploaded: hasUpload, verified: hasUpload };
+          }),
+          uploadedDocuments: trade.tradeDocuments || [],
         },
       },
     });

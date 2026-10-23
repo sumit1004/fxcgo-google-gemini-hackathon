@@ -24,6 +24,8 @@ import {
   Layers,
   FileText,
   Upload,
+  UploadCloud,
+  Download,
   Info,
   Check,
   X
@@ -37,6 +39,7 @@ export default function TradeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [retryingStage, setRetryingStage] = useState(null);
+  const [uploadingDoc, setUploadingDoc] = useState(null);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('UNIFIED'); // 'UNIFIED' | 'CURRENCY' | 'ROUTE' | 'WEATHER' | 'FREIGHT' | 'DOCS'
 
@@ -129,6 +132,39 @@ export default function TradeDetailPage() {
     }
   };
 
+  // Direct upload for customs checklist document
+  const handleDirectUpload = async (docType, file) => {
+    if (!file) return;
+    setUploadingDoc(docType);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('document', file);
+      formData.append('tradeRequestId', id);
+      formData.append('tradeId', id);
+      formData.append('documentType', docType);
+      formData.append('docType', docType);
+
+      const res = await api.post('/documents/upload', formData);
+      if (res.success) {
+        await fetchReport();
+      } else {
+        alert(res.error || res.message || 'Failed to upload document');
+      }
+    } catch (err) {
+      alert(`Upload failed: ${err.message}`);
+    } finally {
+      setUploadingDoc(null);
+    }
+  };
+
+  // Direct download for stored documents
+  const handleDownloadDoc = (docId) => {
+    const token = localStorage.getItem('token') || '';
+    window.open(`http://localhost:5000/api/documents/${docId}/download?token=${token}`, '_blank');
+  };
+
   // Initialize or update Leaflet Map when Tab is ROUTE or UNIFIED
   useEffect(() => {
     if (!mapContainerRef.current) return;
@@ -148,8 +184,10 @@ export default function TradeDetailPage() {
         maxZoom: 9,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?api_key=cb1_4smk_1_ed451ed47e6787149394ba90', {
         attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
+        subdomains: 'abcd',
+        maxZoom: 19,
       }).addTo(map);
 
       mapInstanceRef.current = map;
@@ -661,7 +699,7 @@ export default function TradeDetailPage() {
                               <circle cx={pt.x} cy={pt.y} r="3.5" fill="#E6FF2B" stroke="#0B4650" strokeWidth="1.5" />
                               {i % 4 === 0 && (
                                 <text x={pt.x} y={height - 12} fontSize="9.5" fill="#6B7280" textAnchor="middle" fontFamily="monospace">
-                                  {pt.date.slice(5)}
+                                  {(pt.date || '').slice(5)}
                                 </text>
                               )}
                             </g>
@@ -1033,75 +1071,191 @@ export default function TradeDetailPage() {
       {/* TAB 6: CUSTOMS & DOCUMENTATION (RULE-BASED ENGINE) */}
       {activeTab === 'DOCS' && (
         <div>
-          {docData ? (
-            <div className="panel">
-              <div className="panel-header" style={{ marginBottom: '1.25rem' }}>
-                <div>
-                  <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <FileCheck2 size={20} color="var(--deep-teal)" />
-                    Trade Documentation & Compliance Checklist
-                  </h2>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--neutral-gray)' }}>
-                    Configurable rule-based checklist based on trade corridor ({tradeOverview.originPort} → {tradeOverview.destinationPort})
-                  </span>
-                </div>
-                <span className="badge badge-completed">
-                  {docData.mandatoryCount} Mandatory / {docData.totalCount} Total
-                </span>
-              </div>
+          {docData ? (() => {
+            const uploadedList = agentOutputs?.uploadedDocuments || [];
+            const docItems = docData.documents || [];
+            const totalMandatory = docItems.filter((d) => d.isMandatory).length;
+            const verifiedMandatory = docItems.filter((d) => {
+              return d.isMandatory && uploadedList.some((u) => u.documentType === d.documentType);
+            }).length;
+            const readinessPct = totalMandatory > 0 ? Math.round((verifiedMandatory / totalMandatory) * 100) : 100;
 
-              {/* Rule-Based Transparency Notice */}
-              <div style={{ background: 'rgba(11, 70, 80, 0.05)', border: '1px solid rgba(11, 70, 80, 0.15)', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1.25rem', display: 'flex', gap: '0.75rem' }}>
-                <Info size={20} color="var(--deep-teal)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                <div style={{ fontSize: '0.82rem', color: '#1F2937', lineHeight: 1.5 }}>
-                  <strong>Rule-Based Regulatory Decision Support: </strong>
-                  {docData.disclaimer || 'This documentation checklist is generated by a rule-based decision support system based on trade direction, ports, cargo category, and Incoterms. It does not replace statutory customs verification.'}
-                </div>
-              </div>
-
-              {/* Documents List */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                {(docData.documents || []).map((doc, idx) => (
-                  <div key={idx} style={{ background: '#FFFFFF', padding: '1.1rem', borderRadius: '8px', border: '1px solid var(--border-card)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-                    <div style={{ flex: 1, minWidth: '280px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
-                        <FileText size={17} color="var(--deep-teal)" />
-                        <span style={{ fontWeight: 700, fontSize: '0.94rem', color: '#111827' }}>{doc.name}</span>
-                        {doc.isMandatory ? (
-                          <span style={{ background: '#FEE2E2', color: '#DC2626', fontSize: '0.72rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
-                            MANDATORY
-                          </span>
-                        ) : (
-                          <span style={{ background: '#F3F4F6', color: '#6B7280', fontSize: '0.72rem', padding: '2px 6px', borderRadius: '4px' }}>
-                            OPTIONAL / CONDITIONAL
-                          </span>
-                        )}
-                      </div>
-                      <p style={{ fontSize: '0.82rem', color: '#4B5563', lineHeight: 1.45, marginBottom: '0.4rem' }}>
-                        {doc.description}
-                      </p>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--neutral-gray)' }}>
-                        Issuing Authority: <strong>{doc.issuingBody || 'Authorized Authority'}</strong> • Category: {doc.category}
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <span className="badge badge-pending" style={{ fontSize: '0.75rem' }}>
-                        Status: REQUIRED
-                      </span>
-                      <button
-                        className="btn-outline"
-                        style={{ fontSize: '0.78rem', padding: '0.4rem 0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-                        onClick={() => alert(`To upload ${doc.name}, navigate to the Document Vault tab.`)}
-                      >
-                        <Upload size={13} /> Upload
-                      </button>
-                    </div>
+            return (
+              <div className="panel">
+                <div className="panel-header" style={{ marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <div>
+                    <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <FileCheck2 size={20} color="var(--deep-teal)" />
+                      Trade Documentation & Statutory Customs Checklist
+                    </h2>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--neutral-gray)' }}>
+                      Corridor: {tradeOverview.originPort} → {tradeOverview.destinationPort} // Real-Time Gate-in Compliance
+                    </span>
                   </div>
-                ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <span className="badge badge-completed">
+                      {verifiedMandatory} of {totalMandatory} Mandatory Verified ({readinessPct}%)
+                    </span>
+                    <Link
+                      to="/dashboard/documents"
+                      className="btn-outline"
+                      style={{ fontSize: '0.78rem', padding: '0.35rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      Document Vault <ExternalLink size={12} />
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Readiness Progress Bar */}
+                <div style={{ marginBottom: '1.25rem', background: '#F3F4F6', borderRadius: '6px', padding: '0.75rem 1rem', border: '1px solid var(--border-card)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', fontSize: '0.8rem', fontWeight: 600 }}>
+                    <span style={{ color: 'var(--deep-teal)' }}>Port Customs Clearance Readiness</span>
+                    <span style={{ color: readinessPct === 100 ? '#059669' : '#D97706' }}>{readinessPct}% Complete</span>
+                  </div>
+                  <div style={{ background: '#E5E7EB', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
+                    <div style={{ background: readinessPct === 100 ? '#059669' : '#0B4650', height: '100%', width: `${readinessPct}%`, transition: 'width 0.4s ease' }} />
+                  </div>
+                </div>
+
+                {/* Rule-Based Transparency Notice */}
+                <div style={{ background: 'rgba(11, 70, 80, 0.05)', border: '1px solid rgba(11, 70, 80, 0.15)', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1.25rem', display: 'flex', gap: '0.75rem' }}>
+                  <Info size={20} color="var(--deep-teal)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div style={{ fontSize: '0.82rem', color: '#1F2937', lineHeight: 1.5 }}>
+                    <strong>Rule-Based Regulatory Decision Support: </strong>
+                    {docData.disclaimer || 'This documentation checklist is generated by a rule-based decision support system based on trade direction, ports, cargo category, and Incoterms. It does not replace statutory customs verification.'}
+                  </div>
+                </div>
+
+                {/* Documents List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  {docItems.map((doc, idx) => {
+                    const uploadedDoc = uploadedList.find((u) => u.documentType === doc.documentType);
+                    const isVerified = !!uploadedDoc;
+
+                    return (
+                      <div 
+                        key={idx} 
+                        style={{ 
+                          background: isVerified ? '#F0FDF4' : '#FFFFFF', 
+                          padding: '1.1rem', 
+                          borderRadius: '8px', 
+                          border: `1px solid ${isVerified ? '#BBF7D0' : 'var(--border-card)'}`, 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'flex-start', 
+                          flexWrap: 'wrap', 
+                          gap: '1rem' 
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: '280px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
+                            {isVerified ? (
+                              <CheckCircle2 size={18} color="#059669" />
+                            ) : (
+                              <FileText size={17} color="var(--deep-teal)" />
+                            )}
+                            <span style={{ fontWeight: 700, fontSize: '0.94rem', color: isVerified ? '#065F46' : '#111827' }}>
+                              {doc.name}
+                            </span>
+                            {doc.isMandatory ? (
+                              <span style={{ background: '#FEE2E2', color: '#DC2626', fontSize: '0.72rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                MANDATORY
+                              </span>
+                            ) : (
+                              <span style={{ background: '#F3F4F6', color: '#6B7280', fontSize: '0.72rem', padding: '2px 6px', borderRadius: '4px' }}>
+                                OPTIONAL / CONDITIONAL
+                              </span>
+                            )}
+                          </div>
+                          <p style={{ fontSize: '0.82rem', color: '#4B5563', lineHeight: 1.45, marginBottom: '0.4rem' }}>
+                            {doc.description}
+                          </p>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--neutral-gray)' }}>
+                            Issuing Authority: <strong>{doc.issuingBody || 'Authorized Authority'}</strong> • Category: {doc.category}
+                          </div>
+
+                          {/* Uploaded File Detail Banner */}
+                          {uploadedDoc && (
+                            <div style={{ marginTop: '0.6rem', padding: '0.4rem 0.6rem', background: '#DCFCE7', borderRadius: '4px', fontSize: '0.76rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <Check size={14} />
+                              <span>
+                                Stored in Vault: <strong>{uploadedDoc.originalName}</strong> ({(uploadedDoc.fileSize / 1024).toFixed(1)} KB) — {new Date(uploadedDoc.uploadedAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                          <span className={`badge ${isVerified ? 'badge-completed' : 'badge-pending'}`} style={{ fontSize: '0.75rem' }}>
+                            {isVerified ? 'VERIFIED' : 'PENDING'}
+                          </span>
+
+                          {isVerified ? (
+                            <div style={{ display: 'flex', gap: '0.4rem' }}>
+                              <button
+                                type="button"
+                                className="btn-outline"
+                                style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                                onClick={() => handleDownloadDoc(uploadedDoc.id)}
+                              >
+                                <Download size={13} /> Download
+                              </button>
+                              
+                              <input
+                                type="file"
+                                id={`replace-file-${doc.documentType}-${idx}`}
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  if (e.target.files?.[0]) handleDirectUpload(doc.documentType, e.target.files[0]);
+                                }}
+                                accept=".pdf,.doc,.docx,.jpg,.png,.webp"
+                              />
+                              <label
+                                htmlFor={`replace-file-${doc.documentType}-${idx}`}
+                                className="btn-outline"
+                                style={{ fontSize: '0.78rem', padding: '0.4rem 0.65rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                              >
+                                {uploadingDoc === doc.documentType ? 'Replacing...' : 'Replace'}
+                              </label>
+                            </div>
+                          ) : (
+                            <div>
+                              <input
+                                type="file"
+                                id={`upload-file-${doc.documentType}-${idx}`}
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  if (e.target.files?.[0]) handleDirectUpload(doc.documentType, e.target.files[0]);
+                                }}
+                                accept=".pdf,.doc,.docx,.jpg,.png,.webp"
+                              />
+                              <label
+                                htmlFor={`upload-file-${doc.documentType}-${idx}`}
+                                className="btn-lime"
+                                style={{ 
+                                  fontSize: '0.78rem', 
+                                  padding: '0.45rem 0.85rem', 
+                                  cursor: 'pointer', 
+                                  display: 'inline-flex', 
+                                  alignItems: 'center', 
+                                  gap: '0.4rem',
+                                  fontWeight: 600
+                                }}
+                              >
+                                <UploadCloud size={14} />
+                                {uploadingDoc === doc.documentType ? 'Encrypting & Storing...' : 'Upload & Verify'}
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ) : (
+            );
+          })() : (
             <div className="panel" style={{ textAlign: 'center', padding: '3rem' }}>
               <FileCheck2 size={36} color="var(--deep-teal)" style={{ margin: '0 auto 1rem auto' }} />
               <h3>Customs Checklist Not Generated</h3>

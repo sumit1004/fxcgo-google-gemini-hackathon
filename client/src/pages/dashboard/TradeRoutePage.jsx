@@ -49,8 +49,10 @@ export default function TradeRoutePage() {
         maxZoom: 9,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?api_key=cb1_4smk_1_ed451ed47e6787149394ba90', {
         attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
+        subdomains: 'abcd',
+        maxZoom: 19,
       }).addTo(map);
 
       mapInstanceRef.current = map;

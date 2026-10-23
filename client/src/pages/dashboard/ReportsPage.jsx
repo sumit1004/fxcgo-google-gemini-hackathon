@@ -92,7 +92,7 @@ export default function ReportsPage() {
             >
               {trades.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.referenceNumber} - {t.commodity.substring(0, 15)}...
+                  {t.tradeRef || t.referenceNumber || 'Trade'} - {(t.cargoDescription || t.commodity || t.tradeName || 'General Cargo').slice(0, 20)}...
                 </option>
               ))}
             </select>
@@ -142,7 +142,7 @@ export default function ReportsPage() {
                       </div>
                     </td>
                     <td style={{ fontFamily: 'var(--font-mono)' }}>
-                      {r.tradeRequest?.referenceNumber || 'PORTFOLIO_WIDE'}
+                      {r.tradeRef || r.tradeRequest?.tradeRef || r.tradeRequest?.referenceNumber || 'PORTFOLIO_WIDE'}
                     </td>
                     <td>
                       <span className="badge badge-active">{r.reportType || 'COMPREHENSIVE'}</span>
@@ -193,7 +193,7 @@ export default function ReportsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-card)', paddingBottom: '1rem' }}>
               <div>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--neutral-gray)' }}>
-                  FXCGO DOSSIER // {selectedReport.id.substring(0, 8)}
+                  FXCGO DOSSIER // {(selectedReport.id || '').slice(0, 8)}
                 </span>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--deep-teal)', marginTop: '2px' }}>
                   {selectedReport.title}

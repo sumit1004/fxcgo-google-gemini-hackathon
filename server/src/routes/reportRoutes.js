@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listReports, saveReport, deleteReport } from '../controllers/reportController.js';
+import { listReports, saveReport, generateReport, deleteReport } from '../controllers/reportController.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
@@ -7,6 +7,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', listReports);
+router.post('/generate', generateReport);
 router.post('/', saveReport);
 router.delete('/:id', deleteReport);
 
