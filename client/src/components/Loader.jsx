@@ -1,3 +1,63 @@
-import { useEffect, useState } from 'react'; import { useProgress } from '@react-three/drei';
-const steps=['Initializing global trade network','Preparing navigation systems','Loading 3D environment','Preparing your experience'];
-export default function Loader({onDone}){const {progress,active,errors}=useProgress();const [timedOut,setTimedOut]=useState(false);const pct=Math.round(timedOut?100:Math.min(100,progress));useEffect(()=>{const safety=setTimeout(()=>setTimedOut(true),6000);return()=>clearTimeout(safety)},[]);useEffect(()=>{if((progress===100&&!active)||timedOut){const t=setTimeout(onDone,420);return()=>clearTimeout(t)}},[progress,active,timedOut,onDone]);const status=errors.length?'3D model unavailable — using voyage fallback':steps[Math.min(steps.length-1,Math.floor(pct/25))];return <div className="loader"><div className="loader-mark">FXC<span>GO</span></div><div className="route"><i style={{width:`${pct}%`}}/><b style={{left:`calc(${pct}% - 6px)`}}>◆</b></div><div className="loader-bottom"><p>{status}</p><strong>{String(pct).padStart(2,'0')}%</strong></div></div>}
+import React, { useEffect, useState } from 'react';
+import { useProgress } from '@react-three/drei';
+import { Ship } from 'lucide-react';
+
+export default function Loader({ onDone }) {
+  const { progress, active, errors } = useProgress();
+  const [fading, setFading] = useState(false);
+  const [safetyTriggered, setSafetyTriggered] = useState(false);
+
+  // Fallback safety timeout in case of network stall or WebGL asset block
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSafetyTriggered(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const actualPct = Math.round(safetyTriggered ? 100 : Math.min(100, progress));
+
+  useEffect(() => {
+    // When progress hits 100% and model asset is finished loading, fade out smoothly
+    if ((progress >= 100 && !active) || safetyTriggered) {
+      setFading(true);
+      const doneTimer = setTimeout(() => {
+        onDone?.();
+      }, 500);
+      return () => clearTimeout(doneTimer);
+    }
+  }, [progress, active, safetyTriggered, onDone]);
+
+  return (
+    <div 
+      className={`loader-overlay ${fading ? 'fade-out' : ''}`}
+      role="status"
+      aria-live="polite"
+    >
+      {/* Centered FXCGO Wordmark */}
+      <div className="loader-logo">
+        FXC<span className="brand-go">GO</span>
+      </div>
+
+      {/* Minimal Lime Line Track with Ship Silhouette */}
+      <div className="loader-track">
+        <div 
+          className="loader-line-fill" 
+          style={{ width: `${actualPct}%` }}
+        />
+        <div 
+          className="loader-ship-icon" 
+          style={{ left: `${actualPct}%` }}
+        >
+          <Ship size={18} strokeWidth={2.4} />
+        </div>
+      </div>
+
+      {/* Loading Percentage & Status */}
+      <div className="loader-meta-row">
+        <span>{errors.length ? 'Standard Model Fallback Ready' : 'Initializing Trade Vessel'}</span>
+        <span className="loader-pct">{String(actualPct).padStart(2, '0')}%</span>
+      </div>
+    </div>
+  );
+}

@@ -1,15 +1,387 @@
+import React, { Component, Suspense, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { ContactShadows, Environment, Float, useGLTF } from '@react-three/drei';
-import { Component, Suspense, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import * as THREE from 'three'; import gsap from 'gsap'; import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useGLTF } from '@react-three/drei';
+import * as THREE from 'three';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
 gsap.registerPlugin(ScrollTrigger);
 
-function ProceduralShip(){const containers=useMemo(()=>Array.from({length:35},(_,i)=>({x:(i%7-3)*.76,z:(Math.floor(i/7)-2)*.54,c:['#147a9d','#d16e42','#d4a33e','#275680'][i%4]})),[]);return <group rotation={[0,.18,0]}><mesh position={[0,-.55,0]} castShadow><boxGeometry args={[7.2,.9,2.45]}/><meshStandardMaterial color="#09243a" metalness={.9} roughness={.24}/></mesh><mesh position={[-.55,-1.05,0]}><boxGeometry args={[5.8,.35,1.9]}/><meshStandardMaterial color="#03101d" metalness={.8}/></mesh><mesh position={[2.7,.12,0]}><boxGeometry args={[1.1,.62,1.9]}/><meshStandardMaterial color="#c8e2e9" metalness={.3}/></mesh>{containers.map((b,i)=><mesh key={i} position={[b.x,.18,b.z]} castShadow><boxGeometry args={[.68,.52,.48]}/><meshStandardMaterial color={b.c} metalness={.45} roughness={.45}/></mesh>)}</group>}
-function LoadedModel(){const {scene}=useGLTF('/models/cargo-ship.glb');const model=useMemo(()=>{const copy=scene.clone(true),box=new THREE.Box3().setFromObject(copy),size=box.getSize(new THREE.Vector3()),scale=7/Math.max(size.x,size.y,size.z);copy.scale.multiplyScalar(scale);const c=new THREE.Box3().setFromObject(copy).getCenter(new THREE.Vector3());copy.position.sub(c);copy.traverse(o=>{if(o.isMesh){o.castShadow=o.receiveShadow=true;if(o.material){o.material=o.material.clone();o.material.metalness=Math.max(.35,o.material.metalness||0);o.material.roughness=Math.min(.7,o.material.roughness??.55)}}});return copy},[scene]);return <primitive object={model}/>}
-class AssetBoundary extends Component{state={bad:false};static getDerivedStateFromError(){return{bad:true}}componentDidCatch(){this.props.onFailure?.()}render(){return this.state.bad?<ProceduralShip/>:this.props.children}}
-function Ocean(){const water=useRef();useFrame(({clock})=>{if(water.current)water.current.position.z=Math.sin(clock.elapsedTime*.15)*.3});return <><mesh ref={water} rotation={[-Math.PI/2,0,0]} position={[0,-1.85,0]} receiveShadow><planeGeometry args={[160,160,32,32]}/><meshStandardMaterial color="#20342d" metalness={.8} roughness={.25}/></mesh><mesh rotation={[-Math.PI/2,0,0]} position={[0,-1.82,0]}><planeGeometry args={[95,95]}/><meshBasicMaterial color="#8fa99a" transparent opacity={.08}/></mesh></>}
-const shipStates={hero:{x:-2.65,y:-.1,z:0,rx:.02,ry:-.42,rz:0,scale:1.08,cx:0,cy:.75,cz:11.8,tx:-1.45,ty:-.1,tz:0},about:{x:2.25,y:.05,z:-.4,rx:.09,ry:.48,rz:0,scale:.91,cx:.7,cy:.85,cz:11.5,tx:1.3,ty:0,tz:0},platform:{x:2.55,y:.2,z:-1.15,rx:.16,ry:1.05,rz:0,scale:.7,cx:.5,cy:.7,cz:11.8,tx:1.65,ty:.05,tz:-.5},closing:{x:.7,y:.1,z:-3.8,rx:.08,ry:1.82,rz:0,scale:.55,cx:0,cy:.6,cz:12.5,tx:.25,ty:0,tz:-2}};
-function ShipJourney(){const rig=useRef(),target=useRef(new THREE.Vector3()),motion=useRef({...shipStates.hero}),{camera,size}=useThree();const states=size.width<760?{hero:shipStates.hero,about:{...shipStates.about,x:.9,y:.32,scale:.67,cx:0,tx:.55},platform:{...shipStates.platform,x:.85,y:.55,scale:.52,cx:0,tx:.55},closing:{...shipStates.closing,x:.15,y:.2,scale:.43,cx:0,tx:0}}:shipStates;useLayoutEffect(()=>{if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;const m=motion.current;Object.assign(m,states.hero);const ctx=gsap.context(()=>{const hero=document.querySelector('#hero'),about=document.querySelector('#about'),features=document.querySelector('#features'),cta=document.querySelector('#cta');const end=()=>cta.offsetTop+innerHeight;const tl=gsap.timeline({scrollTrigger:{trigger:hero,start:'top top',end,scrub:1.05,invalidateOnRefresh:true,anticipatePin:1}});const duration=(el,previous)=>Math.max(.12,(el.offsetTop-previous)/end());tl.to(m,{...states.about,duration:duration(about,0),ease:'none'}).to(m,{...states.platform,duration:duration(features,about.offsetTop),ease:'none'}).to(m,{...states.closing,duration:duration(cta,features.offsetTop),ease:'none'});ScrollTrigger.refresh();},document.body);return()=>ctx.revert()},[size.width]);useFrame(()=>{const m=motion.current;if(!rig.current)return;rig.current.position.set(m.x,m.y,m.z);rig.current.rotation.set(m.rx,m.ry,m.rz);rig.current.scale.setScalar(m.scale);camera.position.lerp(new THREE.Vector3(m.cx,m.cy,m.cz),.12);target.current.lerp(new THREE.Vector3(m.tx,m.ty,m.tz),.12);camera.lookAt(target.current)});return <group ref={rig}><AssetBoundary><Suspense fallback={<ProceduralShip/>}><LoadedModel/></Suspense></AssetBoundary></group>}
-function World(){return <><color attach="background" args={['#101715']}/><fog attach="fog" args={['#101715',8,30]}/><ambientLight intensity={1.1} color="#f4f0e8"/><hemisphereLight args={['#b8c2b8','#101715',1.1]}/><directionalLight position={[-7,8,6]} intensity={3.2} color="#f4f0e8" castShadow/><pointLight position={[-6,1,2]} intensity={18} distance={16} color="#8fa99a"/><pointLight position={[5,0,-3]} intensity={10} distance={14} color="#d66b45"/><Ocean/><ShipJourney/><ContactShadows position={[0,-1.78,0]} opacity={.42} scale={25} blur={2.8} far={8}/><Environment preset="night" environmentIntensity={.35}/></>}
-export default function CargoShipScene(){const [webgl,setWebgl]=useState(true);if(!webgl)return <div className="webgl-fallback"><p>3D voyage unavailable</p></div>;return <div className="ship-canvas" aria-hidden="true"><Canvas shadows dpr={[1,1.75]} camera={{position:[0,1.1,11],fov:40,near:.1,far:200}} gl={{antialias:true,powerPreference:'high-performance'}} onCreated={({gl})=>setWebgl(!!gl)}><World/></Canvas></div>}
+// Procedural fallback model if GLB asset fails to load (clean 3D with ZERO shadows)
+function ProceduralShip() {
+  const containers = useMemo(() => 
+    Array.from({ length: 32 }, (_, i) => ({
+      x: ((i % 8) - 3.5) * 0.65,
+      y: Math.floor(i / 16) * 0.5 + 0.2,
+      z: (Math.floor((i % 16) / 8) - 0.5) * 0.65,
+      color: ['#0B4650', '#E6FF2B', '#898A8D', '#d94b26', '#2a5b64'][i % 5]
+    })), 
+  []);
+
+  return (
+    <group>
+      {/* Lower Hull */}
+      <mesh position={[0, -0.35, 0]}>
+        <boxGeometry args={[6.8, 0.6, 2.0]} />
+        <meshStandardMaterial color="#0B4650" metalness={0.4} roughness={0.5} />
+      </mesh>
+      {/* Upper Hull */}
+      <mesh position={[0, 0.05, 0]}>
+        <boxGeometry args={[6.6, 0.45, 1.9]} />
+        <meshStandardMaterial color="#072e35" metalness={0.6} roughness={0.4} />
+      </mesh>
+      {/* Bridge / Superstructure on Left (Stern) */}
+      <mesh position={[-2.4, 0.7, 0]}>
+        <boxGeometry args={[1.1, 0.95, 1.6]} />
+        <meshStandardMaterial color="#F9F7F2" metalness={0.2} roughness={0.4} />
+      </mesh>
+      {/* Pointed Bow on Right */}
+      <mesh position={[3.3, -0.05, 0]} rotation={[0, 0, -Math.PI / 8]}>
+        <boxGeometry args={[0.8, 0.5, 1.5]} />
+        <meshStandardMaterial color="#0B4650" metalness={0.4} roughness={0.5} />
+      </mesh>
+      {/* Containers */}
+      {containers.map((b, i) => (
+        <mesh key={i} position={[b.x + 0.3, b.y, b.z]}>
+          <boxGeometry args={[0.58, 0.45, 0.55]} />
+          <meshStandardMaterial color={b.color} metalness={0.3} roughness={0.5} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// Loaded GLTF Cargo Ship Model with ZERO cast/receive shadow and realistic material lighting
+function LoadedModel() {
+  const { scene } = useGLTF('/models/cargo-ship.glb');
+
+  const model = useMemo(() => {
+    const copy = scene.clone(true);
+    const box = new THREE.Box3().setFromObject(copy);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    
+    // Scale normalized so maximum dimension is 6.4 units
+    const scaleFactor = 6.4 / maxDim;
+    copy.scale.multiplyScalar(scaleFactor);
+
+    // Re-center model geometry so center is at (0, 0, 0)
+    const centeredBox = new THREE.Box3().setFromObject(copy);
+    const center = centeredBox.getCenter(new THREE.Vector3());
+    copy.position.sub(center);
+
+    // Completely remove shadows while preserving rich surface materials and lighting
+    copy.traverse((obj) => {
+      if (obj.isMesh) {
+        obj.castShadow = false;
+        obj.receiveShadow = false;
+        if (obj.material) {
+          obj.material = obj.material.clone();
+          obj.material.metalness = Math.max(0.25, obj.material.metalness || 0);
+          obj.material.roughness = Math.min(0.65, obj.material.roughness ?? 0.45);
+        }
+      }
+    });
+
+    return copy;
+  }, [scene]);
+
+  return <primitive object={model} />;
+}
+
+// Error Boundary for 3D Model Loading
+class AssetBoundary extends Component {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(err) {
+    console.warn('3D ship model loading issue, using procedural fallback:', err);
+    this.props.onFailure?.();
+  }
+  render() {
+    return this.state.hasError ? <ProceduralShip /> : this.props.children;
+  }
+}
+
+// Coordinated 3D Ship Journey
+function ShipJourney() {
+  const rigRef = useRef();
+  const { size, camera } = useThree();
+
+  const isMobile = size.width < 768;
+
+  // Responsive state positions computed from exact camera frustum bounds
+  const states = useMemo(() => {
+    // Ship voyage depth in 3D scene
+    const shipZ = 0.5;
+    const camZ = camera.position?.z || 11;
+    const dist = camZ - shipZ; // 10.5
+    const vFovRad = ((camera.fov || 38) * Math.PI) / 180;
+    const visibleHeight = 2 * Math.tan(vFovRad / 2) * dist; // ~7.23 units
+    const visibleWidth = visibleHeight * (size.width / size.height);
+
+    if (isMobile) {
+      const scale = 0.34;
+      const halfShipLength = 3.2 * scale; // ~1.09
+      // Fit completely within mobile viewport
+      const maxX = Math.min((visibleWidth / 2) - halfShipLength - 0.15, 1.25);
+      const minX = Math.max(-(visibleWidth / 2) + halfShipLength + 0.15, -1.25);
+      const bottomY = -(visibleHeight / 2) + 0.82;
+
+      return {
+        hero: {
+          x: 0.0,
+          y: -1.3,
+          z: 0.5,
+          rx: 0.03,
+          ry: 3.02, // Bow faces RIGHT
+          rz: 0.0,
+          scale: 0.58
+        },
+        about: {
+          x: 0.0,
+          y: -1.25,
+          z: 0.5,
+          rx: 0.03,
+          ry: 0.15, // Bow faces LEFT
+          rz: 0.0,
+          scale: 0.55
+        },
+        featuresStart: {
+          x: minX,
+          y: bottomY,
+          z: 0.5,
+          rx: 0.02,
+          ry: 3.02, // Bow faces RIGHT
+          rz: 0.0,
+          scale
+        },
+        featuresEnd: {
+          x: maxX,
+          y: bottomY,
+          z: 0.5,
+          rx: 0.02,
+          ry: 3.02, // Bow faces RIGHT, fixed at extreme right
+          rz: 0.0,
+          scale
+        }
+      };
+    }
+
+    // Desktop & Tablet Viewports
+    const scale = 0.44;
+    const halfShipLength = 3.2 * scale; // ~1.41
+    // Extreme right: right frustum boundary minus half ship length minus margin
+    const maxX = (visibleWidth / 2) - halfShipLength - 0.35;
+    // Bottom-left start
+    const minX = -(visibleWidth / 2) + halfShipLength + 0.4;
+    const bottomY = -(visibleHeight / 2) + 0.85;
+
+    return {
+      hero: {
+        x: -2.9,
+        y: -0.15,
+        z: 0.2,
+        rx: 0.03,
+        ry: 3.02, // Bow clearly faces RIGHT
+        rz: 0.0,
+        scale: 0.94
+      },
+      about: {
+        x: 3.0,
+        y: -0.15,
+        z: 0.2,
+        rx: 0.03,
+        ry: 0.15, // Bow clearly faces LEFT
+        rz: 0.0,
+        scale: 0.90
+      },
+      featuresStart: {
+        x: minX,
+        y: bottomY,
+        z: 0.5,
+        rx: 0.02,
+        ry: 3.02, // Bow faces RIGHT
+        rz: 0.0,
+        scale
+      },
+      featuresEnd: {
+        x: maxX,
+        y: bottomY,
+        z: 0.5,
+        rx: 0.02,
+        ry: 3.02, // Bow faces RIGHT, fixed at extreme right
+        rz: 0.0,
+        scale
+      }
+    };
+  }, [size.width, size.height, camera, isMobile]);
+
+  const motionRef = useRef({ ...states.hero });
+
+  useLayoutEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+
+    const m = motionRef.current;
+    Object.assign(m, states.hero);
+
+    const ctx = gsap.context(() => {
+      const hero = document.getElementById('hero');
+      const features = document.getElementById('features');
+
+      if (!hero || !features) return;
+
+      // 1. Master continuous scroll-driven timeline strictly bounded from Hero to the end of Features.
+      // Proportions are calibrated to match the exact DOM heights of Hero, About Us, and Features.
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: hero,
+          start: 'top top',
+          endTrigger: features,
+          end: 'bottom bottom',
+          scrub: 1.0,
+          invalidateOnRefresh: true
+        }
+      });
+
+      // Step 1: Hero to About Us (0 to 35%): Ship voyages from LEFT to RIGHT, rotating ~180° to face LEFT
+      tl.to(m, {
+        ...states.about,
+        duration: 3.5,
+        ease: 'power1.inOut'
+      });
+
+      // Step 2: About Us reading hold (35% to 58%): Ship stays steady at About Us position
+      tl.to(m, {
+        ...states.about,
+        duration: 2.3,
+        ease: 'none'
+      });
+
+      // Step 3: Transition into Features Start (58% to 74%): Ship arrives at bottom-left of Features, rotating bow to RIGHT
+      tl.to(m, {
+        ...states.featuresStart,
+        duration: 1.6,
+        ease: 'power1.inOut'
+      });
+
+      // Step 4: Features Section Voyage (74% to 90%): Ship sails horizontally along bottom toward extreme right side
+      tl.to(m, {
+        ...states.featuresEnd,
+        duration: 1.6,
+        ease: 'power1.out'
+      });
+
+      // Step 5: Fix at extreme right (90% to 100%): Ship stays stationary at extreme right of Features for remainder of section
+      tl.to(m, {
+        ...states.featuresEnd,
+        duration: 1.0,
+        ease: 'none'
+      });
+
+      // 2. Features Exit: When Features scrolls away, the ship travels upward WITH the Features section
+      // and leaves the viewport completely without entering the Contact Us section.
+      gsap.to('.ship-canvas', {
+        scrollTrigger: {
+          trigger: features,
+          start: 'bottom bottom',
+          end: 'bottom top',
+          scrub: true,
+          invalidateOnRefresh: true
+        },
+        y: () => -window.innerHeight,
+        ease: 'none'
+      });
+
+      ScrollTrigger.refresh();
+    });
+
+    return () => ctx.revert();
+  }, [states]);
+
+  // Frame loop: update transforms with gentle natural maritime buoyancy
+  useFrame(({ clock }) => {
+    const m = motionRef.current;
+    if (!rigRef.current) return;
+
+    const t = clock.elapsedTime;
+    const buoyancyY = Math.sin(t * 1.1) * 0.022;
+    const buoyancyRoll = Math.sin(t * 0.8) * 0.009;
+    const buoyancyPitch = Math.cos(t * 0.6) * 0.005;
+
+    rigRef.current.position.set(m.x, m.y + buoyancyY, m.z);
+    rigRef.current.rotation.set(m.rx + buoyancyPitch, m.ry, m.rz + buoyancyRoll);
+    rigRef.current.scale.setScalar(m.scale);
+  });
+
+  return (
+    <group ref={rigRef}>
+      <AssetBoundary>
+        <Suspense fallback={<ProceduralShip />}>
+          <LoadedModel />
+        </Suspense>
+      </AssetBoundary>
+    </group>
+  );
+}
+
+// Clean studio lighting with ZERO shadows
+function StudioLighting() {
+  return (
+    <>
+      <ambientLight intensity={1.5} color="#ffffff" />
+      <directionalLight
+        position={[8, 14, 10]}
+        intensity={2.6}
+        color="#ffffff"
+      />
+      <directionalLight 
+        position={[-8, 6, -6]} 
+        intensity={1.1} 
+        color="#F9F7F2" 
+      />
+      <hemisphereLight args={['#ffffff', '#0B4650', 0.85]} />
+      <ShipJourney />
+    </>
+  );
+}
+
+// React Three Fiber Canvas Layer
+export default function CargoShipScene() {
+  const [webglSupported, setWebglSupported] = useState(true);
+
+  if (!webglSupported) {
+    return (
+      <div className="webgl-fallback" role="img" aria-label="FXCGO 3D Cargo Ship">
+        <p>3D Voyage Mode Active</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ship-canvas" aria-hidden="true">
+      <Canvas
+        dpr={[1, 1.75]}
+        camera={{ position: [0, 0, 11], fov: 38, near: 0.1, far: 80 }}
+        gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
+        onCreated={({ gl }) => {
+          if (!gl) {
+            setWebglSupported(false);
+            return;
+          }
+          gl.setClearColor(0x000000, 0); // Transparent WebGL canvas
+          if (gl.shadowMap) {
+            gl.shadowMap.enabled = false;
+          }
+        }}
+      >
+        <StudioLighting />
+      </Canvas>
+    </div>
+  );
+}
+
 useGLTF.preload('/models/cargo-ship.glb');
