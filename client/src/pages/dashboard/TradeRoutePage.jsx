@@ -16,6 +16,8 @@ import { api } from '../../api/client';
 export default function TradeRoutePage() {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const activeTileLayerRef = useRef(null);
+  const [baseMapStyle, setBaseMapStyle] = useState('voyager');
 
   const [origin, setOrigin] = useState('Shanghai');
   const [destination, setDestination] = useState('Rotterdam');
@@ -26,6 +28,40 @@ export default function TradeRoutePage() {
     riskRating: 'MODERATE',
     fuelBunkeringEstimateUSD: 142000,
   });
+
+  // Switch map basemaps dynamically
+  const switchBaseMap = (style) => {
+    setBaseMapStyle(style);
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (activeTileLayerRef.current) {
+      map.removeLayer(activeTileLayerRef.current);
+    }
+
+    let layer;
+    if (style === 'osm') {
+      layer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+      });
+    } else if (style === 'ocean') {
+      layer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri &copy; GEBCO, NOAA',
+        maxZoom: 13,
+      });
+    } else {
+      layer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_4smk_1_ed451ed47e6787149394ba90&api_key=cb1_4smk_1_ed451ed47e6787149394ba90', {
+        attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
+        subdomains: 'abcd',
+        maxZoom: 19,
+      });
+    }
+
+    layer.addTo(map);
+    layer.bringToBack();
+    activeTileLayerRef.current = layer;
+  };
 
   // Coordinates for key global maritime ports
   const PORTS = {
@@ -49,12 +85,13 @@ export default function TradeRoutePage() {
         maxZoom: 9,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?api_key=cb1_4smk_1_ed451ed47e6787149394ba90', {
+      const voyagerLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_4smk_1_ed451ed47e6787149394ba90&api_key=cb1_4smk_1_ed451ed47e6787149394ba90', {
         attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
         subdomains: 'abcd',
         maxZoom: 19,
       }).addTo(map);
 
+      activeTileLayerRef.current = voyagerLayer;
       mapInstanceRef.current = map;
     }
 
@@ -185,7 +222,67 @@ export default function TradeRoutePage() {
       </div>
 
       {/* Interactive Leaflet Map */}
-      <div className="panel" style={{ padding: '0.5rem', marginBottom: '1.5rem' }}>
+      <div className="panel" style={{ padding: '0.85rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 700, color: 'var(--deep-teal)' }}>
+            <Compass size={17} />
+            <span>Interactive Maritime Geodesic SeaRoute</span>
+          </div>
+
+          <div style={{ display: 'inline-flex', gap: '0.3rem', background: '#E5E7EB', padding: '2px', borderRadius: '6px' }}>
+            <button
+              type="button"
+              onClick={() => switchBaseMap('voyager')}
+              style={{
+                fontSize: '0.72rem',
+                padding: '0.25rem 0.55rem',
+                borderRadius: '4px',
+                border: 'none',
+                background: baseMapStyle === 'voyager' ? 'var(--deep-teal)' : 'transparent',
+                color: baseMapStyle === 'voyager' ? '#E6FF2B' : '#374151',
+                cursor: 'pointer',
+                fontWeight: 600,
+                transition: 'all 0.15s ease',
+              }}
+            >
+              Carto Voyager
+            </button>
+            <button
+              type="button"
+              onClick={() => switchBaseMap('osm')}
+              style={{
+                fontSize: '0.72rem',
+                padding: '0.25rem 0.55rem',
+                borderRadius: '4px',
+                border: 'none',
+                background: baseMapStyle === 'osm' ? 'var(--deep-teal)' : 'transparent',
+                color: baseMapStyle === 'osm' ? '#E6FF2B' : '#374151',
+                cursor: 'pointer',
+                fontWeight: 600,
+                transition: 'all 0.15s ease',
+              }}
+            >
+              OpenStreetMap (Clean)
+            </button>
+            <button
+              type="button"
+              onClick={() => switchBaseMap('ocean')}
+              style={{
+                fontSize: '0.72rem',
+                padding: '0.25rem 0.55rem',
+                borderRadius: '4px',
+                border: 'none',
+                background: baseMapStyle === 'ocean' ? 'var(--deep-teal)' : 'transparent',
+                color: baseMapStyle === 'ocean' ? '#E6FF2B' : '#374151',
+                cursor: 'pointer',
+                fontWeight: 600,
+                transition: 'all 0.15s ease',
+              }}
+            >
+              Maritime Ocean
+            </button>
+          </div>
+        </div>
         <div ref={mapContainerRef} className="map-frame" />
       </div>
 
